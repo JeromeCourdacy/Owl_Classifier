@@ -1,0 +1,16 @@
+# BirdBox inference requirements, pinned as in upstream commit 1fefa6d.
+# Export/conversion dependencies (onnx, onnxslim) are unnecessary for .pt inference.
+# BirdBox source and model weights are downloaded automatically on first run.
+numpy==2.0.2
+pandas==2.3.3
+scipy==1.15.2
+librosa==0.11.0
+soundfile==0.13.1
+soxr==1.1.0
+ultralytics==8.4.84
+opencv-python==4.13.0.92
+matplotlib==3.10.9
+seaborn==0.13.2
+tqdm==4.67.3
+openpyxl==3.1.5
+birdnet-analyzer==2.4.0
