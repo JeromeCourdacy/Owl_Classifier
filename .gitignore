@@ -3,7 +3,5 @@
 _backup/
 __pycache__/
 data/
-negative_detections.csv
 negative_detections_clips/
-negatives_owls.csv
 negatives_owls_clips/
