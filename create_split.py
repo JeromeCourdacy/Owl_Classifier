@@ -9,15 +9,20 @@ seconds in the referenced file. All XC copies/windows share one source group,
 including negatives from owl recordings. Risoux files each represent one source
 recording. This prevents source-recording leakage, not recordist/site leakage.
 
-70/10/20 is targeted by sample count within each class/subclass, preserving the
-existing class proportions (no downsampling). Indivisible source groups mean
-ratios are approximate. The seed makes the allocation reproducible for unchanged
-inputs. Only the Python standard library and the existing numpy dependency are
-needed. Existing split.csv is replaced atomically after validation.
+Exclude exact clip paths listed in ambiguous.csv (no audio deletion), then
+sample each class down to the smallest remaining class. Negative subclasses
+receive near-equal quotas, redistributing unused capacity from small subclasses.
+Sampling keeps one random window per source recording where the quota permits,
+then randomly fills the remaining slots without replacement. When a subclass has
+more recordings than slots (notably Risoux), randomly select source recordings.
+70/10/20 is targeted within each class/subclass; whole-source groups make ratios
+approximate. Seeded runs are reproducible for unchanged inputs. Existing
+split.csv is replaced atomically only after validation. Run python split.py;
+create_split.py remains supported. --dry-run reports counts without writing.
 """
 import argparse
 import csv
-from collections import Counter
+from collections import Counter, defaultdict
 from dataclasses import dataclass
 from pathlib import Path
 import re
@@ -128,6 +133,93 @@ def load_samples(root):
     return samples
 
 
+def exclude_ambiguous(samples, csv_path, root):
+    """Exclude listed files, not all siblings from the same XC recording."""
+    blocked = set()
+    with csv_path.open(newline='') as handle:
+        reader = csv.DictReader(handle)
+        if 'file_path' not in (reader.fieldnames or []):
+            raise ValueError(f'{csv_path}: missing file_path column')
+        for row in reader:
+            path = Path(row['file_path'])
+            if not row['file_path'].strip() or '..' in path.parts:
+                raise ValueError(f'Invalid ambiguous file path: {path}')
+            if path.is_absolute():
+                if 'data' not in path.parts:
+                    raise ValueError(f'Cannot relocate ambiguous path: {path}')
+                path = Path(*path.parts[path.parts.index('data'):])
+            blocked.add(path.as_posix())
+    known = {s.recording for s in samples}
+    unknown = blocked - known
+    if unknown:
+        raise ValueError(f'{len(unknown)} ambiguous paths are absent from input data: {sorted(unknown)[:3]}')
+    remaining = [s for s in samples if s.recording not in blocked]
+    print(f'Excluded {len(samples) - len(remaining):,} windows from {len(blocked):,} flagged files.')
+    return remaining
+
+
+def balanced_quotas(capacities, total, rng):
+    """Integer water filling: near-equal counts subject to available capacity."""
+    if total > sum(capacities.values()) or total < len(capacities):
+        raise ValueError('Insufficient budget/capacity to represent every negative subclass')
+    quotas = dict.fromkeys(capacities, 0)
+    order = list(sorted(capacities))
+    rng.shuffle(order)
+    while total:
+        active = [key for key in order if quotas[key] < capacities[key]]
+        for key in active:
+            if not total:
+                break
+            quotas[key] += 1
+            total -= 1
+    return quotas
+
+
+def sample_windows(pool, count, rng):
+    """Maximize source coverage, then randomly sample unused windows."""
+    if count == len(pool):
+        return list(pool)
+    groups = defaultdict(list)
+    for index, sample in enumerate(pool):
+        groups[sample.group].append(index)
+    group_names = sorted(groups)
+    if count < len(group_names):
+        chosen_groups = rng.choice(len(group_names), size=count, replace=False)
+        chosen = {int(rng.choice(groups[group_names[i]])) for i in chosen_groups}
+    else:
+        chosen = {int(rng.choice(groups[g])) for g in group_names}
+        available = [i for i in range(len(pool)) if i not in chosen]
+        if count > len(chosen):
+            chosen.update(map(int, rng.choice(available, size=count-len(chosen), replace=False)))
+    return [sample for i, sample in enumerate(pool) if i in chosen]
+
+
+def balance_samples(samples, seed):
+    rng = np.random.default_rng(seed)
+    pools = defaultdict(list)
+    for sample in samples:
+        pools[sample.label].append(sample)
+    if set(pools) != {'pygmy', 'boreal', 'negative'}:
+        raise ValueError('All three classes must contain eligible samples')
+    target = min(map(len, pools.values()))
+    selected = []
+    for label in ('pygmy', 'boreal'):
+        selected.extend(sample_windows(pools[label], target, rng))
+    negative_pools = defaultdict(list)
+    for sample in pools['negative']:
+        negative_pools[sample.subclass].append(sample)
+    quotas = balanced_quotas({k:len(v) for k,v in negative_pools.items()}, target, rng)
+    for subclass in sorted(negative_pools):
+        pool = negative_pools[subclass]
+        selected.extend(sample_windows(pool, quotas[subclass], rng))
+        n_sources = len({s.group for s in pool})
+        if n_sources > quotas[subclass]:
+            print(f'{subclass}: randomly retaining {quotas[subclass]:,} of {n_sources:,} sources (subclass budget).')
+    assert Counter(s.label for s in selected) == dict.fromkeys(pools, target)
+    print(f'Balanced classes: {target:,} each; {len(selected):,} total windows.')
+    return selected
+
+
 def allocate(samples, seed):
     """Greedy grouped stratification followed by improving whole-group moves."""
     strata = sorted({s.stratum for s in samples})
@@ -194,10 +286,18 @@ def main():
     parser.add_argument('--root', type=Path, default=Path(__file__).resolve().parent)
     parser.add_argument('--output', type=Path, default=Path('split.csv'))
     parser.add_argument('--seed', type=int, default=42)
+    parser.add_argument('--ambiguous', type=Path, default=Path('ambiguous.csv'))
+    parser.add_argument('--dry-run', action='store_true', help='Validate and report without writing split.csv')
     args = parser.parse_args()
     root = args.root.resolve()
     print('Loading dataset...', flush=True)
     samples = load_samples(root)
+    expected_strata = {s.stratum for s in samples}
+    ambiguous = args.ambiguous if args.ambiguous.is_absolute() else root / args.ambiguous
+    samples = exclude_ambiguous(samples, ambiguous, root)
+    if {s.stratum for s in samples} != expected_strata:
+        raise ValueError('Ambiguity exclusion removed an entire class/subclass')
+    samples = balance_samples(samples, args.seed)
     print(f'Assigning {len(samples):,} windows from {len({s.group for s in samples}):,} source recordings...', flush=True)
     assignment = allocate(samples, args.seed)
     summary = Counter((s.stratum, assignment[s.group]) for s in samples)
@@ -209,6 +309,13 @@ def main():
         if not all(counts):
             raise ValueError(f'{stratum} cannot be represented in every split with this allocation.')
     output = args.output if args.output.is_absolute() else root / args.output
+    if args.dry_run:
+        print('Dry run complete; no files changed.')
+        return
+    protected = {root / name for name in ('ambiguous.csv', 'pygmy_detections.csv', 'boreal_detections.csv', 'negatives_owls.csv')}
+    protected.add(ambiguous.resolve())
+    if output.resolve() in protected:
+        raise ValueError('Output cannot overwrite an input CSV')
     write_csv(samples, assignment, output)
     print(f'Wrote {output}. All windows from each source recording share one split.')
 
