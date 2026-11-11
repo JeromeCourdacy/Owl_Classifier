@@ -1,7 +1,7 @@
 """
 Owl TinyML pipeline - Waveform augmentation (adapted from Mathieu Bornet's 4.NoiseAugmenting.py)
 
-Reads the TRAIN windows listed in split.csv and creates augmented copies of them,
+Creates augmented copies of the TRAIN windows listed in split.csv,
 to make the model robust to forest noise and to small natural variations of the songs.
 Validation and test windows are never augmented.
 
@@ -9,22 +9,22 @@ Class-aware augmentation:
   - owl classes (pygmy, boreal): noise mixing, Gaussian noise, small pitch shift, small time stretch
   - negative class: only noise mixing and Gaussian noise (pitch/stretch would create unnatural sounds)
 
-Every augmented clip keeps a link to its source recording (XC id) in a CSV manifest,
-so that the grouped train/validation split stays leakage-free.
+Reading split.csv and loading audio is done in dataset.py;
+spectrogram.py puts dataset.py and augment.py together.
 All parameters come from config.py.
 """
 
-import csv
+import argparse
 import random
 import warnings
 from pathlib import Path
-import argparse
 
 import librosa
 import numpy as np
 import soundfile as sf
 
 import config
+import dataset
 
 warnings.filterwarnings('ignore', category=UserWarning)
 
@@ -67,51 +67,6 @@ def apply_time_stretch(signal, rate, target_length):
 
 
 # ==========================================
-# READING split.csv
-# ==========================================
-
-def read_split_rows(csv_path=config.SPLIT_CSV):
-    """Return ALL rows of split.csv (train, validation, test), each with a unique row_id."""
-    rows = []
-    with open(csv_path, newline="", encoding="utf-8") as f:
-        for i, row in enumerate(csv.DictReader(f)):
-            row["row_id"] = i
-            rows.append(row)
-    return rows
-
-
-def read_train_rows(csv_path=config.SPLIT_CSV):
-    """Return only the TRAIN rows of split.csv."""
-    return [r for r in read_split_rows(csv_path) if r["split"] == "train"]
-
-
-def group_by_recording(rows):
-    """Group the rows by audio file, so that each file is loaded only once."""
-    groups = {}
-    for row in rows:
-        groups.setdefault(row["recording"], []).append(row)
-    return groups
-
-
-def load_windows(recording, rows):
-    """Load one recording once and cut all of its windows.
-
-    Each window starts at start_s and is exactly WINDOW_SAMPLES long.
-    Returns a list of (row, signal) pairs.
-    """
-    audio, _ = librosa.load(config.ROOT / recording, sr=config.SR, mono=True)
-    if len(audio) < config.WINDOW_SAMPLES:
-        audio = np.pad(audio, (0, config.WINDOW_SAMPLES - len(audio)))
-    windows = []
-    for row in rows:
-        start = int(round(float(row["start_s"]) * config.SR))
-        start = min(start, len(audio) - config.WINDOW_SAMPLES)
-        windows.append((row, audio[start:start + config.WINDOW_SAMPLES]))
-    return windows
-
-
-
-# ==========================================
 # NOISE BANK
 # ==========================================
 
@@ -122,7 +77,7 @@ def build_noise_bank(train_rows):
     """
     return sorted({row["recording"] for row in train_rows
                    if row["subclass"] in config.NOISE_BANK_SUBCLASSES})
-    
+
 
 def get_noise_slice(noise_files, length):
     """Return `length` samples of noise taken at random from the noise bank.
@@ -139,7 +94,6 @@ def get_noise_slice(noise_files, length):
     noise = np.concatenate(pieces)
     start = random.randint(0, len(noise) - length)
     return noise[start:start + length]
-
 
 
 # ==========================================
@@ -180,41 +134,6 @@ def augment_window(signal, cls, noise_files):
 
 
 # ==========================================
-# MAIN LOOP
-# ==========================================
-
-def iter_all_windows(rows, noise_files, max_recordings=None, max_failures=20):
-    """Yield every sound to turn into a spectrogram.
-
-    For each window of `rows`: first the original (any split), then its
-    augmented copies (train only, N_AUG_PER_WINDOW per class).
-    Yields (row, kind, signal, aug, param), kind = "original", "aug0", "aug1", ...
-    Each source recording is loaded only once.
-    """
-    groups = group_by_recording(rows)
-    failures = 0
-    for i, (recording, rec_rows) in enumerate(groups.items(), 1):
-        if max_recordings is not None and i > max_recordings:
-            break
-        try:
-            windows = load_windows(recording, rec_rows)
-        except Exception as e:
-            failures += 1
-            print(f"  [skip] {recording}: {e}")
-            if failures > max_failures:
-                raise RuntimeError(f"Too many unreadable files ({failures}), stopping.")
-            continue
-        for row, signal in windows:
-            yield row, "original", signal, "", ""
-            if row["split"] == "train":
-                for k in range(config.N_AUG_PER_WINDOW.get(row["class"], 0)):
-                    out, aug, param = augment_window(signal, row["class"], noise_files)
-                    yield row, f"aug{k}", out, aug, round(param, 3)
-        if i % 200 == 0:
-            print(f"  {i}/{len(groups)} recordings done")
-
-
-## ==========================================
 # COMMAND LINE
 # ==========================================
 
@@ -226,8 +145,8 @@ def save_examples(train_rows, noise_files, n, out_dir):
         old.unlink()
     rows = [r for r in train_rows if config.N_AUG_PER_WINDOW.get(r["class"], 0) > 0]
     sample = random.sample(rows, min(n, len(rows)))
-    for recording, rec_rows in group_by_recording(sample).items():
-        for row, signal in load_windows(recording, rec_rows):
+    for recording, rec_rows in dataset.group_by_recording(sample).items():
+        for row, signal in dataset.load_windows(recording, rec_rows):
             out, aug, param = augment_window(signal, row["class"], noise_files)
             name = f'{row["class"]}_{Path(recording).stem}_{float(row["start_s"]):.2f}s'
             sf.write(out_dir / f"{name}_original.wav", signal, config.SR)
@@ -242,7 +161,7 @@ def main():
                         help="folder for the examples (emptied first)")
     args = parser.parse_args()
 
-    rows = read_train_rows()
+    rows = dataset.read_train_rows()
     noise_files = build_noise_bank(rows)
     print(f"{len(rows)} train windows, {len(noise_files)} noise files")
     for cls in config.CLASSES:
