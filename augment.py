@@ -9,8 +9,6 @@ Class-aware augmentation:
   - owl classes (pygmy, boreal): noise mixing, Gaussian noise, small pitch shift, small time stretch
   - negative class: only noise mixing and Gaussian noise (pitch/stretch would create unnatural sounds)
 
-Reading split.csv and loading audio is done in dataset.py;
-spectrogram.py puts dataset.py and augment.py together.
 All parameters come from config.py.
 """
 

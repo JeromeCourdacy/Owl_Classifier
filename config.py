@@ -11,7 +11,7 @@ NOISE_CLASS = "negative"       # class that only gets noise mixing + Gaussian no
 
 # --- Audio ---
 SR = 16000
-WINDOW_SAMPLES = 32768         # 2,048 s — À DÉCIDER avec Jérôme (32000 = 2,0 s)
+WINDOW_SAMPLES = 32000         # 2.0 s -> 40 x 61 spectrogram (decided 13.11.2026)
 
 # --- Spectrogramme ---
 N_FFT = 1024        #samples by window

@@ -2,7 +2,7 @@
 Owl TinyML pipeline - Spectrograms (adapted from Mathieu Bornet's 5.MelSpectrogramPreProcess.py)
 
 One step of the pipeline: sound -> Mel spectrogram image -> .npy file + manifest line.
-  - audio_to_melspectrogram : one window of sound -> 40 x 63 image (must match the firmware)
+  - audio_to_melspectrogram : one window of sound -> 40 x 61 image (must match the firmware)
   - augment_spectrogram     : SpecAugment copy of an image (off while SPECAUG_COPIES = 0)
   - start_output            : create the output folder and open manifest.csv
   - process_sound           : sound -> image(s) -> .npy + manifest lines
@@ -31,7 +31,7 @@ np.random.seed(config.SEED)
 # ==========================================
 
 AUG_CFG = {
-    "time_max":   8,    # max width of a time mask (frames), out of 63 (~0.25 s)
+    "time_max":   8,    # max width of a time mask (frames), out of 61 (~0.25 s)
     "p_time":     0.8,
     "freq_max":   3,    # max width of a freq mask (Mel bins), out of 40
     "p_freq":     0.8,
