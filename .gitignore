@@ -5,3 +5,5 @@ __pycache__/
 data/
 negative_detections_clips/
 negatives_owls_clips/
+Owl_training_data/
+.vscode/
