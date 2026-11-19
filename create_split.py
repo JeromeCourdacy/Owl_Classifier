@@ -22,6 +22,7 @@ create_split.py remains supported. --dry-run reports counts without writing.
 """
 import argparse
 import csv
+import json
 from collections import Counter, defaultdict
 from dataclasses import dataclass
 from pathlib import Path
@@ -30,6 +31,7 @@ import os
 import tempfile
 
 import numpy as np
+from xc_download import SPECIES as OWL_SPECIES
 
 SPECIES = (
     'Otus scops', 'Strix aluco', 'Sitta europaea', 'Pyrrhula pyrrhula',
@@ -43,6 +45,8 @@ AUDIO = {'.wav', '.mp3', '.flac', '.ogg', '.m4a', '.wma', '.aiff', '.aif', '.aud
 SPLITS = ('train', 'validation', 'test')
 RATIOS = np.array([0.7, 0.1, 0.2])
 FIELDS = ('class', 'subclass', 'recording', 'start_s', 'end_s', 'split')
+# These detections were reviewed and assigned to the wrong owl class.
+MISLABELED_DETECTIONS = {('pygmy', 'XC837525'), ('boreal', 'XC1090828')}
 
 
 @dataclass(frozen=True)
@@ -88,6 +92,8 @@ def load_samples(root):
             if not required.issubset(reader.fieldnames or []):
                 raise ValueError(f'{filename}: missing columns {required}')
             for row in reader:
+                if (label, row['recording_id']) in MISLABELED_DETECTIONS:
+                    continue
                 # Old absolute paths survive relocation by retaining data/... .
                 parts = Path(row['file_path']).parts
                 if 'data' not in parts:
@@ -263,7 +269,22 @@ def allocate(samples, seed):
     return {g: SPLITS[assigned[i]] for i, g in enumerate(groups)}
 
 
-def write_csv(samples, assignment, output):
+def load_call_types(root):
+    """Index the recording-level Xeno-canto types by foreground class and XC ID."""
+    call_types = {}
+    for label, (foreground, _) in OWL_SPECIES.items():
+        manifest = root / 'data' / label / 'manifest.jsonl'
+        if not manifest.is_file():
+            continue
+        with manifest.open(encoding='utf-8') as handle:
+            for line in handle:
+                recording = json.loads(line)['recording']
+                if f"{recording['gen']} {recording['sp']}" == foreground:
+                    call_types[label, f"XC{recording['id']}"] = recording.get('type') or ''
+    return call_types
+
+
+def write_csv(samples, assignment, output, call_types):
     output.parent.mkdir(parents=True, exist_ok=True)
     temporary = None
     try:
@@ -273,7 +294,10 @@ def write_csv(samples, assignment, output):
             writer = csv.writer(handle)
             writer.writerow(FIELDS)
             for s in samples:
-                writer.writerow((s.label, s.subclass, s.recording, s.start, s.end,
+                subclass = s.subclass
+                if s.label in OWL_SPECIES:
+                    subclass = call_types.get((s.label, Path(s.recording).stem), '')
+                writer.writerow((s.label, subclass, s.recording, s.start, s.end,
                                  assignment[s.group]))
         os.replace(temporary, output)
     finally:
@@ -316,7 +340,7 @@ def main():
     protected.add(ambiguous.resolve())
     if output.resolve() in protected:
         raise ValueError('Output cannot overwrite an input CSV')
-    write_csv(samples, assignment, output)
+    write_csv(samples, assignment, output, load_call_types(root))
     print(f'Wrote {output}. All windows from each source recording share one split.')
 
 
