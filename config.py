@@ -31,7 +31,7 @@ SNR_RANGE_DB = (0, 15)
 GAUSS_SNR_RANGE_DB = (20, 40)   # Gaussian hiss level relative to the song (dB)
 SEED = 42
 NOISE_BANK_SUBCLASSES = ("risoux_background",)   # split.csv subclasses used as mixing noise
-N_AUG_PER_WINDOW = {"pygmy": 1, "boreal": 1, "negative": 0}   # augmented copies per train window
+N_AUG_PER_WINDOW = {"pygmy": 1, "boreal": 1, "negative": 1}   # augmented copies per train window
 SPECAUG_COPIES = 0   # SpecAugment copies per train spectrogram (0 = off)
 
 # --- Chemins ---
