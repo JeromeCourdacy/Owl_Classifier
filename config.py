@@ -38,6 +38,9 @@ SPECAUG_COPIES = 0   # SpecAugment copies per train spectrogram (0 = off)
 ROOT = Path(__file__).resolve().parent
 DATA = ROOT / "data"
 PROCESSED   = DATA / "processed"
-# Recording paths in the split and manifests are relative to the repo root.
-AUDIO_ROOT  = ROOT
+# Recording paths in split.csv start with data/... They are looked up in:
+#  - ROOT/Owl_training_data/ when that export folder exists (2 s clips from Jerome),
+#  - otherwise ROOT/ (full recordings in ROOT/data/...).
+EXPORT_ROOT = ROOT / "Owl_training_data"
+AUDIO_ROOT  = EXPORT_ROOT if (EXPORT_ROOT / "data").is_dir() else ROOT
 SPLIT_CSV   = DATA / "split.csv"
