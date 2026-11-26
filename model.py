@@ -12,6 +12,7 @@ import argparse
 import csv
 import datetime
 import json
+import tempfile
 import time
 from pathlib import Path
 
@@ -300,14 +301,19 @@ if not args.metrics_out:
 
 timer.start("TFLite Post-Training Quantization (PTQ)")
 
-@tf.function(input_signature=[tf.TensorSpec([1, n_mels, T, 1], tf.float32, name="mel_input")])
-def serving_fn(x):
-    return model(x, training=False)
+# The ESP32 processes one spectrogram at a time: export a SavedModel with a fixed batch size of 1
+# (Keras 3 way: ExportArchive -> SavedModel -> TFLiteConverter.from_saved_model)
+export_dir = tempfile.mkdtemp()
+archive = keras.export.ExportArchive()
+archive.track(model)
+archive.add_endpoint(
+    name="serve",
+    fn=lambda x: model(x, training=False),
+    input_signature=[tf.TensorSpec([1, n_mels, T, 1], tf.float32, name="mel_input")],
+)
+archive.write_out(export_dir, verbose=False)
 
-concrete_fn = serving_fn.get_concrete_function()
-
-
-converter_f32 = tf.lite.TFLiteConverter.from_concrete_functions([concrete_fn], model)
+converter_f32 = tf.lite.TFLiteConverter.from_saved_model(export_dir)
 tflite_f32 = converter_f32.convert()
 
 if not args.metrics_out:
@@ -315,7 +321,7 @@ if not args.metrics_out:
         f.write(tflite_f32)
 
 
-converter_int8 = tf.lite.TFLiteConverter.from_concrete_functions([concrete_fn], model)
+converter_int8 = tf.lite.TFLiteConverter.from_saved_model(export_dir)
 converter_int8.optimizations = [tf.lite.Optimize.DEFAULT]
 
 # Calibration set: 300 train spectrograms picked at random (all classes), not the first 300
