@@ -86,7 +86,7 @@ def get_noise_slice(noise_files, length):
     pieces, total = [], 0
     while total < length:
         path = random.choice(noise_files)
-        noise, _ = librosa.load(config.ROOT / path, sr=config.SR, mono=True)
+        noise, _ = librosa.load(config.AUDIO_ROOT / path, sr=config.SR, mono=True)
         pieces.append(noise)
         total += len(noise)
     noise = np.concatenate(pieces)

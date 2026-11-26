@@ -10,6 +10,8 @@ No augmentation here (see augment.py). All parameters come from config.py.
 """
 
 import csv
+from decimal import Decimal
+from pathlib import Path
 
 import librosa
 import numpy as np
@@ -21,13 +23,43 @@ import config
 # READING split.csv
 # ==========================================
 
+def clip_path(recording, start_s, end_s):
+    """Name of the 2 s clip cut by Jerome from a full recording.
+
+    The start and end times are written in nanoseconds after the XC ID, e.g.
+    data/pygmy/XC1000474.wav, 0.0013125 -> 2.0013125 s
+    -> data/pygmy/XC1000474_000001312500_002001312500.wav
+    """
+    ns = lambda s: int((Decimal(s) * 10**9).to_integral_value())
+    rec = Path(recording)
+    return (rec.parent / f"{rec.stem}_{ns(start_s):012d}_{ns(end_s):012d}.wav").as_posix()
+
+
+def use_clip_if_needed(row):
+    """Point a row to its pre-cut 2 s clip when the full recording is not in AUDIO_ROOT.
+
+    The clip then starts at 0 s. The original recording and start time are kept
+    in source_recording / source_start_s.
+    """
+    row["source_recording"], row["source_start_s"] = row["recording"], row["start_s"]
+    if (config.AUDIO_ROOT / row["recording"]).exists():
+        return row
+    clip = clip_path(row["recording"], row["start_s"], row["end_s"])
+    if (config.AUDIO_ROOT / clip).exists():
+        row["recording"], row["start_s"] = clip, "0"
+    return row
+
+
 def read_split_rows(csv_path=config.SPLIT_CSV):
-    """Return ALL rows of split.csv (train, validation, test), each with a unique row_id."""
+    """Return ALL rows of split.csv (train, validation, test), each with a unique row_id.
+
+    Rows that point to a full recording we do not have are redirected to its 2 s clip.
+    """
     rows = []
     with open(csv_path, newline="", encoding="utf-8") as f:
         for i, row in enumerate(csv.DictReader(f)):
             row["row_id"] = i
-            rows.append(row)
+            rows.append(use_clip_if_needed(row))
     return rows
 
 
@@ -54,7 +86,7 @@ def load_windows(recording, rows):
     Each window starts at start_s and is exactly WINDOW_SAMPLES long.
     Returns a list of (row, signal) pairs.
     """
-    audio, _ = librosa.load(config.ROOT / recording, sr=config.SR, mono=True)
+    audio, _ = librosa.load(config.AUDIO_ROOT / recording, sr=config.SR, mono=True)
     if len(audio) < config.WINDOW_SAMPLES:
         audio = np.pad(audio, (0, config.WINDOW_SAMPLES - len(audio)))
     windows = []

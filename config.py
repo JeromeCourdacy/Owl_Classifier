@@ -38,4 +38,5 @@ SPECAUG_COPIES = 0   # SpecAugment copies per train spectrogram (0 = off)
 ROOT = Path(__file__).resolve().parent
 DATA = ROOT / "data"  
 PROCESSED   = DATA / "processed"
-SPLIT_CSV   = ROOT / "split.csv"
+AUDIO_ROOT  = ROOT / "Owl_training_data"
+SPLIT_CSV   = AUDIO_ROOT / "split.csv"

@@ -460,7 +460,7 @@ if not args.metrics_out:
         for r, p8 in zip(test_rows, y_pred_ptq):
             if p8 == CLASS_TO_INDEX[r["class"]]:
                 continue
-            src = config.ROOT / r["recording"]
+            src = config.AUDIO_ROOT / r["recording"]
             if not src.exists():
                 missing += 1
                 continue
