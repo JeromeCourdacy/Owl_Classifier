@@ -15,14 +15,18 @@ All parameters come from config.py.
 import argparse
 import random
 import warnings
+import sys
 from pathlib import Path
 
 import librosa
 import numpy as np
 import soundfile as sf
 
+if __package__ in (None, ""):
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+
 import config
-import dataset
+from scripts.model import dataset
 
 warnings.filterwarnings('ignore', category=UserWarning)
 

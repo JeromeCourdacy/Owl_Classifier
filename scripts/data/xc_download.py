@@ -13,6 +13,11 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode, urlsplit
 from urllib.request import Request, urlopen
 
+if __package__ in (None, ""):
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+
+from config import DATA, ROOT
+
 API = "https://xeno-canto.org/api/3/recordings"
 SPECIES = {
     "pygmy": ("Glaucidium passerinum", "Aegolius funereus"),
@@ -123,8 +128,8 @@ def download(recording, folder):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--output", type=Path, default=Path("data"), help="Parent of pygmy/ and boreal/ (default: data)")
-    parser.add_argument("--env-file", type=Path, default=Path(".env"))
+    parser.add_argument("--output", type=Path, default=DATA, help="Parent of pygmy/ and boreal/ (default: data)")
+    parser.add_argument("--env-file", type=Path, default=ROOT / ".env")
     parser.add_argument("--dry-run", action="store_true", help="Fetch and filter metadata without downloading audio")
     args = parser.parse_args()
     key = load_key(args.env_file)

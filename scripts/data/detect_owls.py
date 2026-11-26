@@ -6,11 +6,11 @@ Setup (Python 3.12):
   conda activate owls
   pip install -r requirements.txt
 Run the entire dataset (data/ by default, recursively):
-  python detect_owls.py --seed 42
-  python detect_owls.py data/pygmy data/boreal --seed 42
+  python -m scripts.data.detect_owls --seed 42
+  python -m scripts.data.detect_owls data/pygmy data/boreal --seed 42
 Test specific recordings, optionally exporting WAV clips:
-  python detect_owls.py test.mp3 test2.mp3 --seed 42 --save-clips
-  python detect_owls.py --self-test
+  python -m scripts.data.detect_owls test.mp3 test2.mp3 --seed 42 --save-clips
+  python -m scripts.data.detect_owls --self-test
 
 Writes exactly two CSVs: pygmy_detections.csv and boreal_detections.csv.
 Use --output-dir to choose their parent directory. Columns: recording_id (file
@@ -62,6 +62,11 @@ import sys
 import tempfile
 from urllib.request import urlopen
 import zipfile
+
+if __package__ in (None, ""):
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+
+from config import DATA
 
 BIRDBOX_COMMIT = "1fefa6d304822185ac53bd39cd8888b1bd2b88d1"
 BIRDBOX_WEIGHT_URL = "https://github.com/birdnet-team/BirdBox/releases/download/v2.0.0/Just-Bird_fp32.pt"
@@ -309,7 +314,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("recordings", nargs="*", type=Path, help="Audio files or recursive directories (default: data/)")
     parser.add_argument("--self-test", action="store_true")
-    parser.add_argument("--output-dir", type=Path, default=Path("."), help="Parent of the two output CSVs (default: current directory)")
+    parser.add_argument("--output-dir", type=Path, default=DATA, help="Parent of the two output CSVs (default: data/)")
     parser.add_argument("--min-confidence", type=float, default=0.5)
     parser.add_argument("--box-confidence", type=float, default=0.15)
     parser.add_argument("--seed", type=int, help="Reproduce random crop positions (default: fresh randomness)")
@@ -329,7 +334,7 @@ def main():
         self_test()
         return 0
     try:
-        paths = discover_recordings(args.recordings or [Path("data")])
+        paths = discover_recordings(args.recordings or [DATA])
     except ValueError as error:
         parser.error(str(error))
     if not paths:

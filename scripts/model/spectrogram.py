@@ -13,12 +13,16 @@ All parameters come from config.py.
 
 import csv
 import random
+import sys
 from pathlib import Path
 
 import librosa
 import numpy as np
 from scipy.ndimage import gaussian_filter
 from scipy.signal import lfilter
+
+if __package__ in (None, ""):
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 import config
 

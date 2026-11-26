@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Flag new negative-species clips using BirdNET (no BirdBox).
 
-python scan_ambiguous.py
-python scan_ambiguous.py --threshold 0.3 --output ambiguous.csv
+python -m scripts.data.scan_ambiguous
+python -m scripts.data.scan_ambiguous --threshold 0.3 --output data/ambiguous.csv
 
 Scores are BirdNET confidence scores, not calibrated presence probabilities.
 Each two-second clip is mixed to mono, resampled to 48 kHz and padded with
@@ -20,8 +20,13 @@ import numpy as np
 import soundfile as sf
 import soxr
 from tqdm import tqdm
-from create_split import SPECIES
-from detect_owls import SAMPLE_RATE, WINDOW, birdnet_predictor, ensure_birdnet_assets
+
+if __package__ in (None, ""):
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+
+from config import ROOT
+from scripts.data.create_split import SPECIES
+from scripts.data.detect_owls import SAMPLE_RATE, WINDOW, birdnet_predictor, ensure_birdnet_assets
 
 FIELDS = ['recording_id', 'file_path', 'expected_species', 'expected_species_score',
           'pygmy_score', 'boreal_score']
@@ -47,8 +52,8 @@ def flagged(scores, indices, threshold):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument('--root', type=Path, default=Path(__file__).resolve().parent)
-    parser.add_argument('--output', type=Path, default=Path('ambiguous.csv'))
+    parser.add_argument('--root', type=Path, default=ROOT)
+    parser.add_argument('--output', type=Path, default=Path('data/ambiguous.csv'))
     parser.add_argument('--threshold', type=float, default=0.3)
     parser.add_argument('--limit', type=int, help='Only scan the first N clips (testing)')
     args = parser.parse_args()
@@ -66,14 +71,14 @@ def main():
         clips = clips[:args.limit]
     ensure_birdnet_assets()
     predict, indices = birdnet_predictor()
-    from birdnet_analyzer import config
-    labels = Path(config.BIRDNET_LABELS_FILE).read_text().splitlines()
+    from birdnet_analyzer import config as birdnet_config
+    labels = Path(birdnet_config.BIRDNET_LABELS_FILE).read_text().splitlines()
     species_indices = {label.split('_', 1)[0]: i for i, label in enumerate(labels)}
     missing = set(SPECIES) - species_indices.keys()
     if missing:
         raise ValueError(f'Expected species absent from model: {sorted(missing)}')
     output = args.output if args.output.is_absolute() else root / args.output
-    if output.resolve() in {p.resolve() for p in root.glob('*.csv') if p.name != 'ambiguous.csv'}:
+    if output.resolve() in {p.resolve() for p in (root / 'data').glob('*.csv') if p.name != 'ambiguous.csv'}:
         raise ValueError('Output must not overwrite an existing dataset CSV')
     output.parent.mkdir(parents=True, exist_ok=True)
     count = errors = 0

@@ -2,7 +2,12 @@
 .DS_Store
 _backup/
 __pycache__/
-data/
+/data/*
+!/data/ambiguous.csv
+!/data/boreal_detections.csv
+!/data/negatives_owls.csv
+!/data/pygmy_detections.csv
+!/data/split.csv
 negative_detections_clips/
 negatives_owls_clips/
 Owl_training_data/

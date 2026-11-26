@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Create split.csv without moving audio or extracting clips.
 
-Run: python create_split.py [--seed 42] [--output split.csv]
-Paths in the recording column are relative to --root (default: this script's
-folder). Classes are pygmy, boreal, negative. Negative subclasses identify the
+Run: python -m scripts.data.create_split [--seed 42] [--output data/split.csv]
+Paths in the recording column are relative to --root (default: the
+repository root). Classes are pygmy, boreal, negative. Negative subclasses identify the
 species, risoux_background, or owl_background_pygmy/boreal. start_s/end_s are
 seconds in the referenced file. All XC copies/windows share one source group,
 including negatives from owl recordings. Risoux files each represent one source
@@ -17,7 +17,7 @@ then randomly fills the remaining slots without replacement. When a subclass has
 more recordings than slots (notably Risoux), randomly select source recordings.
 70/10/20 is targeted within each class/subclass; whole-source groups make ratios
 approximate. Seeded runs are reproducible for unchanged inputs. Existing
-split.csv is replaced atomically only after validation. Run python split.py;
+split.csv is replaced atomically only after validation. Run python -m scripts.data.split;
 create_split.py remains supported. --dry-run reports counts without writing.
 """
 import argparse
@@ -28,10 +28,15 @@ from dataclasses import dataclass
 from pathlib import Path
 import re
 import os
+import sys
 import tempfile
 
 import numpy as np
-from xc_download import SPECIES as OWL_SPECIES
+if __package__ in (None, ""):
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+
+from config import ROOT
+from scripts.data.xc_download import SPECIES as OWL_SPECIES
 
 SPECIES = (
     'Otus scops', 'Strix aluco', 'Sitta europaea', 'Pyrrhula pyrrhula',
@@ -86,7 +91,7 @@ def load_samples(root):
     for filename, label in [('pygmy_detections.csv', 'pygmy'),
                             ('boreal_detections.csv', 'boreal'),
                             ('negatives_owls.csv', 'negative')]:
-        with (root / filename).open(newline='') as handle:
+        with (root / 'data' / filename).open(newline='') as handle:
             reader = csv.DictReader(handle)
             required = {'recording_id', 'file_path', 'start_s', 'end_s'}
             if not required.issubset(reader.fieldnames or []):
@@ -307,10 +312,10 @@ def write_csv(samples, assignment, output, call_types):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument('--root', type=Path, default=Path(__file__).resolve().parent)
-    parser.add_argument('--output', type=Path, default=Path('split.csv'))
+    parser.add_argument('--root', type=Path, default=ROOT)
+    parser.add_argument('--output', type=Path, default=Path('data/split.csv'))
     parser.add_argument('--seed', type=int, default=42)
-    parser.add_argument('--ambiguous', type=Path, default=Path('ambiguous.csv'))
+    parser.add_argument('--ambiguous', type=Path, default=Path('data/ambiguous.csv'))
     parser.add_argument('--dry-run', action='store_true', help='Validate and report without writing split.csv')
     args = parser.parse_args()
     root = args.root.resolve()
@@ -336,7 +341,10 @@ def main():
     if args.dry_run:
         print('Dry run complete; no files changed.')
         return
-    protected = {root / name for name in ('ambiguous.csv', 'pygmy_detections.csv', 'boreal_detections.csv', 'negatives_owls.csv')}
+    protected = {
+        (root / 'data' / name).resolve()
+        for name in ('ambiguous.csv', 'pygmy_detections.csv', 'boreal_detections.csv', 'negatives_owls.csv')
+    }
     protected.add(ambiguous.resolve())
     if output.resolve() in protected:
         raise ValueError('Output cannot overwrite an input CSV')

@@ -12,8 +12,8 @@ Output: data/processed/<version>/{train,validation,test}/<class>/*.npy + manifes
         + config_used.py (copy of config.py) + summary.txt
 
 Usage:
-  python pipeline.py                         # full dataset -> data/processed/data_v1
-  python pipeline.py --version data_test --limit 20    # quick test on 20 audio files
+  python -m scripts.model.pipeline                         # full dataset -> data/processed/data_v1
+  python -m scripts.model.pipeline --version data_test --limit 20    # quick test on 20 audio files
 """
 
 import argparse
@@ -22,14 +22,16 @@ import shutil
 import time
 import warnings
 from collections import Counter
+import sys
 from pathlib import Path
 
 import numpy as np
 
+if __package__ in (None, ""):
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+
 import config
-import dataset
-import augment
-import spectrogram
+from scripts.model import augment, dataset, spectrogram
 
 
 warnings.filterwarnings("ignore", category=FutureWarning)

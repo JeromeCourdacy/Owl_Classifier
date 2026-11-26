@@ -36,7 +36,8 @@ SPECAUG_COPIES = 0   # SpecAugment copies per train spectrogram (0 = off)
 
 # --- Chemins ---
 ROOT = Path(__file__).resolve().parent
-DATA = ROOT / "data"  
+DATA = ROOT / "data"
 PROCESSED   = DATA / "processed"
-AUDIO_ROOT  = ROOT / "Owl_training_data"
-SPLIT_CSV   = AUDIO_ROOT / "split.csv"
+# Recording paths in the split and manifests are relative to the repo root.
+AUDIO_ROOT  = ROOT
+SPLIT_CSV   = DATA / "split.csv"

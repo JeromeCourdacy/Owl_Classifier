@@ -11,10 +11,14 @@ No augmentation here (see augment.py). All parameters come from config.py.
 
 import csv
 from decimal import Decimal
+import sys
 from pathlib import Path
 
 import librosa
 import numpy as np
+
+if __package__ in (None, ""):
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 import config
 

@@ -3,11 +3,11 @@
 
 From this repository, using the existing owls environment:
   conda activate owls
-  python xc_download_negatives.py
+  python -m scripts.data.xc_download_negatives
 
 Optional:
-  python xc_download_negatives.py --dry-run
-  python xc_download_negatives.py --species "Otus scops" --hours 5
+  python -m scripts.data.xc_download_negatives --dry-run
+  python -m scripts.data.xc_download_negatives --species "Otus scops" --hours 5
 
 Reads XC_KEY from .env or the environment. Defaults to the 19 requested species
 and five hours each. Original complete recordings go to data/negatives/<Genus_species>/.
@@ -44,7 +44,11 @@ import unicodedata
 import soundfile as sf
 from tqdm import tqdm
 
-import xc_download as xc
+if __package__ in (None, ""):
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+
+from config import DATA, ROOT
+from scripts.data import xc_download as xc
 
 SPECIES = (
     "Otus scops", "Strix aluco", "Sitta europaea", "Pyrrhula pyrrhula",
@@ -254,8 +258,8 @@ def collect(species, args, key):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--output", type=Path, default=Path("data/negatives"))
-    parser.add_argument("--env-file", type=Path, default=Path(".env"))
+    parser.add_argument("--output", type=Path, default=DATA / "negatives")
+    parser.add_argument("--env-file", type=Path, default=ROOT / ".env")
     parser.add_argument("--hours", type=float, default=5.)
     parser.add_argument("--species", nargs="+", choices=SPECIES, help="Optional subset, with quoted scientific names")
     parser.add_argument("--seed", type=int, default=42)

@@ -14,6 +14,7 @@ import datetime
 import json
 import tempfile
 import time
+import sys
 from pathlib import Path
 
 
@@ -30,7 +31,9 @@ from sklearn.metrics import classification_report, confusion_matrix, f1_score, b
 import keras
 import tensorflow as tf
 from keras import layers, models, callbacks, regularizers
-from ai_edge_litert.interpreter import Interpreter
+
+if __package__ in (None, ""):
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 import config
 
@@ -347,7 +350,7 @@ timer.stop("TFLite Post-Training Quantization (PTQ)")
 
 
 def make_interpreter(tflite_model_bytes):
-    interp = Interpreter(model_content=tflite_model_bytes)
+    interp = tf.lite.Interpreter(model_content=tflite_model_bytes)
     interp.allocate_tensors()
     return interp
 

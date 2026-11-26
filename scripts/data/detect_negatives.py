@@ -2,12 +2,12 @@
 """Find candidate two-second negatives using BirdNET alone (no BirdBox).
 
   conda activate owls
-  python detect_negatives.py
-  python detect_negatives.py data/pygmy data/boreal --threshold 0.05
-  python detect_negatives.py data/pygmy/XC1008185.mp3 --save-clips
-  python detect_negatives.py --self-test
+  python -m scripts.data.detect_negatives
+  python -m scripts.data.detect_negatives data/pygmy data/boreal --threshold 0.05
+  python -m scripts.data.detect_negatives data/pygmy/XC1008185.mp3 --save-clips
+  python -m scripts.data.detect_negatives --self-test
 
-Defaults: recursively scan data/, write negatives_owls.csv, no audio export.
+Defaults: recursively scan data/, write data/negatives_owls.csv, no audio export.
 Scan full audio with 3-second windows at a 1-second hop, including an end-anchored
 last window. Remove the whole window plus a 1-second margin whenever EITHER owl
 score is >=0.01, regardless of which species ranks first. Invalid scores also
@@ -42,8 +42,13 @@ from pathlib import Path
 import sys
 import tempfile
 
-from detect_owls import (SAMPLE_RATE, WINDOW, birdnet_predictor,
-                         discover_recordings, ensure_birdnet_assets, storage)
+if __package__ in (None, ""):
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+
+from config import DATA
+from scripts.data.detect_owls import (
+    SAMPLE_RATE, WINDOW, birdnet_predictor, discover_recordings, ensure_birdnet_assets, storage,
+)
 
 FRAME = 3 * SAMPLE_RATE
 FIELDS = ["recording_id", "file_path", "start_s", "end_s", "pygmy_score", "boreal_score"]
@@ -235,7 +240,7 @@ def self_test():
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("recordings", nargs="*", type=Path)
-    parser.add_argument("--output", type=Path, default=Path("negatives_owls.csv"))
+    parser.add_argument("--output", type=Path, default=DATA / "negatives_owls.csv")
     parser.add_argument("--threshold", type=float, default=.01)
     parser.add_argument("--margin", type=float, default=1., help="Seconds excluded on each side of suspect intervals")
     parser.add_argument("--hop", type=float, default=1., help="Step between three-second scan windows")
@@ -252,14 +257,14 @@ def main():
         self_test()
         return 0
     try:
-        paths = discover_recordings(args.recordings or [Path("data")])
+        paths = discover_recordings(args.recordings or [DATA])
     except ValueError as error:
         parser.error(str(error))
     if not paths:
         parser.error("No supported audio recordings found")
     if args.output.suffix.lower() != ".csv" or args.output.resolve() in paths:
         parser.error("--output must be a CSV distinct from the recordings")
-    positive_csvs = {Path(f"{species}_detections.csv").resolve() for species in ("pygmy", "boreal")}
+    positive_csvs = {(DATA / f"{species}_detections.csv").resolve() for species in ("pygmy", "boreal")}
     if args.output.resolve() in positive_csvs:
         parser.error("Choose a separate negative CSV; positive outputs must be preserved")
     args.clips_dir = args.output.parent / f"{args.output.stem}_clips"

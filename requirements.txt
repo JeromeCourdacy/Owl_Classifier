@@ -1,4 +1,4 @@
-# BirdBox inference requirements, pinned as in upstream commit 1fefa6d.
+# Owl dataset and training dependencies. BirdBox inference pins follow upstream commit 1fefa6d.
 # Export/conversion dependencies (onnx, onnxslim) are unnecessary for .pt inference.
 # BirdBox source and model weights are downloaded automatically on first run.
 numpy==2.0.2
@@ -14,5 +14,9 @@ seaborn==0.13.2
 tqdm==4.67.3
 openpyxl==3.1.5
 birdnet-analyzer==2.4.0
+# Model training and TFLite export.
+scikit-learn==1.9.1
+tensorflow==2.21.0
+keras==3.15.1
 # Kernel for dataset_distribution.ipynb in notebook editors.
 ipykernel
